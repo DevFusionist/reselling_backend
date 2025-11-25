@@ -1,11 +1,11 @@
-Final Reseller Backend (minimal working)
+# Bun + Drizzle + Neon Ecom Backend (with Razorpay & Refresh Tokens)
 
-Setup:
-1. Install dependencies: npm install
-2. Copy .env.example -> .env and fill values (MongoDB, Redis, Razorpay keys)
-3. Start local MongoDB and Redis
-4. npm run dev
+Quick start:
+1. Install Bun: https://bun.sh
+2. Copy `.env.example` to `.env` and fill values.
+3. bun install
+4. bun run dev
 
 Notes:
-- This is a minimal final package focused on the server core.
-- For production, enable secure cookies, HTTPS, and stronger env handling.
+- Razorpay payouts require Razorpay account activation for payouts feature.
+- This is a starter: integrate production-grade queue and error monitoring before going live.

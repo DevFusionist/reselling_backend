@@ -1,6 +1,5 @@
-import winston from "winston";
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || "info",
-  transports: [new winston.transports.Console({ format: winston.format.simple() })]
-});
-export default logger;
+export const log = {
+  info: (...args: any[]) => console.info("[INFO]", ...args),
+  warn: (...args: any[]) => console.warn("[WARN]", ...args),
+  error: (...args: any[]) => console.error("[ERROR]", ...args),
+};
