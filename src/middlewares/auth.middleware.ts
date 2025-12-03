@@ -37,6 +37,7 @@ export async function authRequired(c: Context, next: Next) {
     c.set("user", { sub: userId, role: payload.role });
     await next();
   } catch (err) {
+    console.log("error -- ", err)
     return c.json(failure("Invalid or expired token", "UNAUTHORIZED"), 401);
   }
 }

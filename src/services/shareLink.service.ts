@@ -32,16 +32,9 @@ export const shareLinkService = {
       throw { status: 404, message: "Share link not found or expired", code: "NOT_FOUND" };
     }
 
-    const basePrice = Number(result.product.base_price);
-    const marginAmount = Number(result.margin_amount);
-    const finalPrice = basePrice + marginAmount;
-
-    return {
-      ...result,
-      base_price: basePrice,
-      margin_amount: marginAmount,
-      final_price: finalPrice
-    };
+    // Repository already returns the transformed data with calculated final price
+    // product.base_price already contains the final price (base_price + margin)
+    return result;
   },
 
   async listShareLinks(creatorId: number) {

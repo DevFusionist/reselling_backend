@@ -1,6 +1,6 @@
 {
-  "id": "9eaa6ff2-1a2d-49a5-9be5-bbac06c0b53e",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "83d4b1d8-ab21-4cee-8c38-22263da4c8bf",
+  "prevId": "9eaa6ff2-1a2d-49a5-9be5-bbac06c0b53e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -446,18 +446,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "reseller_price": {
+          "name": "reseller_price",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retail_price": {
+          "name": "retail_price",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "stock": {
           "name": "stock",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "image_url": {
-          "name": "image_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",

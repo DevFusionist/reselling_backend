@@ -16,5 +16,8 @@ export const tokenRepo = {
   },
   async revokeByUser(user_id: number) {
     await db.update(refresh_tokens).set({ revoked: true }).where(eq(refresh_tokens.user_id, user_id));
+  },
+  async revokeAllByUser(user_id: number) {
+    await db.delete(refresh_tokens).where(eq(refresh_tokens.user_id, user_id));
   }
 };

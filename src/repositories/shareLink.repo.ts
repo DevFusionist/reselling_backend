@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { share_links, products } from "../db/schema";
+import { share_links, products, product_images } from "../db/schema";
 import { eq, and, desc, sql, gt } from "drizzle-orm";
 import { CreateShareLinkInput } from "../dtos/shareLink.dto";
 import { v4 as uuidv4 } from "uuid";
@@ -33,10 +33,11 @@ export const shareLinkRepo = {
     const link = await db.query.share_links.findFirst({
       where: eq(share_links.code, code),
       with: {
-        product: true,
-        creator: true
+        product: true
       }
     });
+
+    const productImages = await db.select().from(product_images).where(eq(product_images.product_id, link!.product!.id));
 
     if (!link) return null;
 
@@ -45,7 +46,25 @@ export const shareLinkRepo = {
       return null;
     }
 
-    return link;
+    // Calculate final price (base_price + margin_amount)
+    const basePrice = Number(link.product.base_price);
+    const marginAmount = Number(link.margin_amount);
+    const finalPrice = (basePrice + marginAmount).toFixed(2);
+
+    // Return only required fields
+    return {
+      id: link.id,
+      code: link.code,
+      expires_at: link.expires_at,
+      product: {
+        id: link.product.id,
+        sku: link.product.sku,
+        title: link.product.title,
+        description: link.product.description,
+        base_price: finalPrice,
+        productImages
+      }
+    };
   },
 
   async findByCreator(creatorId: number) {

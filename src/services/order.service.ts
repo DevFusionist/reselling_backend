@@ -83,8 +83,8 @@ export const orderService = {
 
   async listOrders(userId: number, userRole: string, input: OrderListInput) {
     if (userRole === "admin") {
-      // Admin can see all orders - implement if needed
-      throw { status: 501, message: "Admin order listing not implemented", code: "NOT_IMPLEMENTED" };
+      // Admin can see all orders with full details
+      return await orderRepo.listAll(input);
     } else if (userRole === "reseller") {
       return await orderRepo.listByReseller(userId, input);
     } else {

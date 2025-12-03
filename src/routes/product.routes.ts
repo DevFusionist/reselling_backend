@@ -13,6 +13,7 @@ router.post("/", authRequired, adminOnly, productController.create);
 router.post("/bulk", authRequired, adminOnly, productController.createBulk);
 router.put("/:id", authRequired, adminOnly, productController.update);
 router.delete("/:id", authRequired, adminOnly, productController.delete);
+router.delete("/images/:imageId", authRequired, adminOnly, productController.deleteImage);
 
 export default router;
 

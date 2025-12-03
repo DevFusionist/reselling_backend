@@ -1,19 +1,21 @@
 import { z } from "zod";
 
 export const CreateProductDTO = z.object({
-  sku: z.string().min(1),
   title: z.string().min(1),
   description: z.string().optional(),
   base_price: z.number().positive(),
-  stock: z.number().int().nonnegative().default(0)
+  reseller_price: z.number().positive().optional(),
+  retail_price: z.number().positive().optional(),
+  stock: z.number().int().nonnegative().default(0),
+  image_urls: z.array(z.string().url()).optional()
 });
 
 export const UpdateProductDTO = z.object({
-  sku: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
   description: z.string().optional(),
   base_price: z.number().positive().optional(),
-  stock: z.number().int().nonnegative().optional()
+  stock: z.number().int().nonnegative().optional(),
+  image_url: z.string().url().optional()
 });
 
 export const ProductListDTO = z.object({

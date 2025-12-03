@@ -1,6 +1,43 @@
 import { productRepo } from "../repositories/product.repo";
 import { CreateProductInput, UpdateProductInput, ProductListInput } from "../dtos/product.dto";
 
+/**
+ * Generate a unique SKU based on product title
+ * Format: First 3 letters of title (uppercase) + timestamp + random string
+ * Example: "LAP-1734567890-A3B2"
+ */
+async function generateUniqueSKU(title: string): Promise<string> {
+  // Extract first 3 letters from title, remove special chars, uppercase
+  const titlePrefix = title
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .substring(0, 3)
+    .toUpperCase()
+    .padEnd(3, 'X'); // Pad with X if less than 3 chars
+
+  const timestamp = Date.now().toString().slice(-10); // Last 10 digits of timestamp
+  const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase(); // 4 char random string
+
+  let sku = `${titlePrefix}-${timestamp}-${randomStr}`;
+  
+  // Ensure uniqueness by checking against existing SKUs
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    const existingSKUs = await productRepo.findExistingSKUs([sku]);
+    if (!existingSKUs.has(sku)) {
+      return sku;
+    }
+    // If SKU exists, generate a new one with different random string
+    const newRandomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+    sku = `${titlePrefix}-${timestamp}-${newRandomStr}`;
+    attempts++;
+  }
+  
+  // Fallback: use UUID-like format if all attempts fail
+  return `${titlePrefix}-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+}
+
 export const productService = {
   /**
    * Import products from CSV file using streaming
@@ -32,15 +69,17 @@ export const productService = {
           try {
             // Map CSV columns to product fields
             // Flexible column name mapping
+            const title = row.title || row.name || row['Product Name'] || row['product_name'] || row['Title'] || '';
+            const sku = row.sku || row.SKU || row['Product SKU'] || row['product_sku'] || '';
+            
             const productData = {
-              sku: row.sku || row.SKU || row['Product SKU'] || row['product_sku'] || '',
-              title: row.title || row.name || row['Product Name'] || row['product_name'] || row['Title'] || '',
+              title,
               description: row.description || row.desc || row['Description'] || row['description'] || '',
               base_price: parseFloat(row.base_price || row.price || row['Base Price'] || row['base_price'] || row['Price'] || '0'),
               stock: parseInt(row.stock || row.quantity || row['Stock'] || row['stock'] || row['Quantity'] || '0', 10)
             };
 
-            // Validate with Zod
+            // Validate with Zod (SKU is not part of DTO, will be generated if missing)
             const parsed = CreateProductDTO.safeParse(productData);
             if (!parsed.success) {
               failedCount++;
@@ -51,7 +90,11 @@ export const productService = {
               continue;
             }
 
-            validProducts.push(parsed.data);
+            // Add SKU to product data (will be generated later if empty)
+            validProducts.push({
+              ...parsed.data,
+              sku: sku.trim() || null // null means will be generated
+            } as any);
           } catch (error: any) {
             failedCount++;
             errors.push({
@@ -64,13 +107,26 @@ export const productService = {
         // Batch insert valid products
         if (validProducts.length > 0) {
           try {
+            // Generate SKUs for products that don't have one
+            const productsWithSKUs = await Promise.all(
+              validProducts.map(async (p: any) => {
+                if (!p.sku || p.sku.trim() === '') {
+                  return {
+                    ...p,
+                    sku: await generateUniqueSKU(p.title)
+                  };
+                }
+                return p;
+              })
+            );
+
             // Check for existing SKUs in this batch
-            const skus = validProducts.map(p => p.sku);
+            const skus = productsWithSKUs.map((p: any) => p.sku);
             const existingSKUs = await productRepo.findExistingSKUs(skus);
             
             // Filter out duplicates
-            const newProducts = validProducts.filter(p => !existingSKUs.has(p.sku));
-            const duplicateCount = validProducts.length - newProducts.length;
+            const newProducts = productsWithSKUs.filter((p: any) => !existingSKUs.has(p.sku));
+            const duplicateCount = productsWithSKUs.length - newProducts.length;
 
             if (newProducts.length > 0) {
               await productRepo.createBulk(newProducts);
@@ -108,13 +164,23 @@ export const productService = {
 
 
   async create(input: CreateProductInput) {
-    // Check if SKU already exists
-    const existing = await productRepo.findAll();
-    const skuExists = existing.some(p => p.sku === input.sku);
-    if (skuExists) {
-      throw { status: 400, message: "SKU already exists", code: "DUPLICATE_SKU" };
+    // Generate SKU if not provided
+    let sku = (input as any).sku;
+    if (!sku || sku.trim() === '') {
+      sku = await generateUniqueSKU(input.title);
+    } else {
+      // Check if provided SKU already exists
+      const existingSKUs = await productRepo.findExistingSKUs([sku]);
+      if (existingSKUs.has(sku)) {
+        throw { status: 400, message: "SKU already exists", code: "DUPLICATE_SKU" };
+      }
     }
-    return await productRepo.create(input);
+
+    // Create product with generated or provided SKU
+    return await productRepo.create({
+      ...input,
+      sku
+    } as CreateProductInput & { sku: string });
   },
 
   async getById(id: number) {
@@ -131,14 +197,9 @@ export const productService = {
       throw { status: 404, message: "Product not found", code: "NOT_FOUND" };
     }
 
-    // Check SKU uniqueness if updating SKU
-    if (input.sku && input.sku !== existing.sku) {
-      const allProducts = await productRepo.findAll();
-      const skuExists = allProducts.some(p => p.sku === input.sku && p.id !== id);
-      if (skuExists) {
-        throw { status: 400, message: "SKU already exists", code: "DUPLICATE_SKU" };
-      }
-    }
+    // SKU updates are not allowed through the update endpoint
+    // SKUs are auto-generated and should remain stable
+    // If SKU needs to be changed, it should be done through a separate admin endpoint
 
     return await productRepo.update(id, input);
   },

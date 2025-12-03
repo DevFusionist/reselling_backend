@@ -8,6 +8,7 @@ import {
   refresh_tokens,
   payments,
   payouts,
+  product_images,
 } from "./schema";
 
 /**
@@ -41,6 +42,8 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   markups: many(reseller_markups),
   // One-to-many: Product can have many share links
   shareLinks: many(share_links),
+  // One-to-many: Product can have many images
+  images: many(product_images),
 }));
 
 export const resellerMarkupsRelations = relations(reseller_markups, ({ one }) => ({
@@ -116,6 +119,13 @@ export const payoutsRelations = relations(payouts, ({ one }) => ({
   reseller: one(users, {
     fields: [payouts.reseller_id],
     references: [users.id],
+  }),
+}));
+
+export const productImagesRelations = relations(product_images, ({ one }) => ({
+  product: one(products, {
+    fields: [product_images.product_id],
+    references: [products.id],
   }),
 }));
 

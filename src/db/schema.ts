@@ -5,6 +5,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   password_hash: text("password_hash").notNull(),
   role: varchar("role", { length: 50 }).notNull().default("customer"), // 'admin'|'reseller'|'customer'
+  profile_picture_url: text("profile_picture_url"),
   created_at: timestamp("created_at").defaultNow().notNull()
 });
 
@@ -14,6 +15,8 @@ export const products = pgTable("products", {
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   base_price: numeric("base_price", { precision: 10, scale: 2 }).notNull(),
+  reseller_price: numeric("reseller_price", { precision: 10, scale: 2 }),
+  retail_price: numeric("retail_price", { precision: 10, scale: 2 }),
   stock: integer("stock").default(0).notNull(),
   created_at: timestamp("created_at").defaultNow().notNull()
 });
@@ -87,4 +90,12 @@ export const payouts = pgTable("payouts", {
   notes: text("notes"),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const product_images = pgTable("product_images", {
+  id: serial("id").primaryKey(),
+  product_id: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  image_url: text("image_url").notNull(),
+  display_order: integer("display_order").default(0).notNull(), // For ordering images
+  created_at: timestamp("created_at").defaultNow().notNull()
 });

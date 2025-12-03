@@ -4,7 +4,7 @@ import { db } from "../db";
 import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { SignupInput, LoginInput } from "../dtos/auth.dto";
-import { JWT_SECRET, JWT_EXPIRY, REFRESH_TOKEN_EXPIRY_DAYS } from "../config";
+import { JWT_SECRET, JWT_EXPIRY, REFRESH_TOKEN_EXPIRY_DAYS, R2_PUBLIC_URL } from "../config";
 import { v4 as uuidv4 } from "uuid";
 import { tokenRepo } from "../repositories/token.repo";
 import { createHash } from 'crypto';
@@ -36,8 +36,13 @@ export const authService = {
     const refreshTokenPlain = uuidv4();
     const refreshHash = sha256Hash(refreshTokenPlain);
     const expires = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    // deleting all the exsitig refresh tokens for the user
+    await tokenRepo.revokeAllByUser(user.id);
     await tokenRepo.save(user.id, refreshHash, expires);
-    return { accessToken, refreshToken: refreshTokenPlain };
+    // Remove password_hash before returning user object
+    const { password_hash, ...userWithoutPassword } = user;
+
+    return { accessToken, refreshToken: refreshTokenPlain, user: userWithoutPassword };
   },
 
   async refresh(refreshTokenPlain: string) {
@@ -59,5 +64,24 @@ export const authService = {
   async logout(refreshTokenPlain: string) {
     const refreshHash = sha256Hash(refreshTokenPlain);
     await tokenRepo.revokeByHash(refreshHash);
+  },
+
+  async updateProfilePicture(userId: number, profilePictureUrl: string) {
+    console.log("profilePictureUrl", profilePictureUrl);
+    const publicUrl = this.convertToPublicUrl(profilePictureUrl);
+    const [user] = await db
+      .update(users)
+      .set({ profile_picture_url: publicUrl })
+      .where(eq(users.id, userId))
+      .returning();
+    if (!user) throw { status: 404, message: "User not found", code: "NOT_FOUND" };
+    return user;
+  },
+
+  convertToPublicUrl(originalUrl: string) {
+    console.log("R2_PUBLIC_URL", R2_PUBLIC_URL);
+    // Extract filename from last part
+    const filename = originalUrl.split("/").pop();
+    return `${R2_PUBLIC_URL}/user/${filename}`;
   }
 };

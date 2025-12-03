@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { orders, products, users } from "../db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { OrderListInput } from "../dtos/order.dto";
 
 export const orderRepo = {
@@ -103,6 +103,67 @@ export const orderRepo = {
         ...o.order,
         product: o.product,
         customer: o.customer
+      })),
+      total: Number(count),
+      page: input.page,
+      limit: input.limit,
+      totalPages: Math.ceil(Number(count) / input.limit)
+    };
+  },
+
+  async listAll(input: OrderListInput) {
+    const offset = (input.page - 1) * input.limit;
+    
+    // Build where conditions
+    const conditions = [];
+    if (input.status) {
+      conditions.push(sql`${orders.status} = ${input.status}`);
+    }
+    
+    const allOrders = await db
+      .select({
+        order: orders,
+        product: products,
+        customer: users
+      })
+      .from(orders)
+      .innerJoin(products, eq(orders.product_id, products.id))
+      .innerJoin(users, eq(orders.customer_id, users.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(orders.created_at))
+      .limit(input.limit)
+      .offset(offset);
+
+    // Get total count with same conditions
+    const countConditions = conditions.length > 0 ? and(...conditions) : undefined;
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(countConditions);
+
+    // Get reseller information for orders that have resellers
+    const resellerIds = allOrders
+      .map(o => o.order.reseller_id)
+      .filter((id): id is number => id !== null && id !== undefined);
+    
+    const resellersMap = new Map<number, any>();
+    if (resellerIds.length > 0) {
+      const resellers = await db
+        .select()
+        .from(users)
+        .where(inArray(users.id, resellerIds));
+      
+      resellers.forEach(reseller => {
+        resellersMap.set(reseller.id, reseller);
+      });
+    }
+
+    return {
+      orders: allOrders.map(o => ({
+        ...o.order,
+        product: o.product,
+        customer: o.customer,
+        reseller: o.order.reseller_id ? resellersMap.get(o.order.reseller_id) || null : null
       })),
       total: Number(count),
       page: input.page,
