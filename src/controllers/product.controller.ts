@@ -1,6 +1,6 @@
 import { Context } from "hono";
 import { productService } from "../services/product.service";
-import { CreateProductDTO, UpdateProductDTO, ProductListDTO, UpdateProductInput } from "../dtos/product.dto";
+import { CreateProductDTO, UpdateProductDTO, ProductListDTO, UpdateProductInput, BulkDeleteProductDTO } from "../dtos/product.dto";
 import { success, failure } from "../utils/apiResponse";
 import { r2Service } from "../services/r2.service";
 import { productImageRepo } from "../repositories/productImage.repo";
@@ -113,7 +113,6 @@ export const productController = {
       // Check if request is multipart form data (for image upload)
       const contentType = c.req.header("content-type") || "";
       let productData: any;
-      let imageUrls: string[] = [];
 
       if (contentType.includes("multipart/form-data")) {
         // Handle multipart form data with images
@@ -125,6 +124,11 @@ export const productController = {
         }
 
         productData = JSON.parse(jsonData);
+        
+        // Normalize brand field: if single brand is provided, convert it to brands array for consistency
+        if (productData.brand && !(productData as any).brands) {
+          (productData as any).brands = [productData.brand];
+        }
 
         // Get all image files (support both "image" and "images" field names for backward compatibility)
         const imageFiles: File[] = [];
@@ -163,7 +167,61 @@ export const productController = {
           // Upload all images to R2
           const uploadedUrls = await r2Service.uploadProductImages(imageFiles, productData.title || productData.sku);
           // Convert R2 URLs to public domain URLs
-          imageUrls = uploadedUrls.map(url => convertProductImageToPublicUrl(url));
+          const publicUrls = uploadedUrls.map(url => convertProductImageToPublicUrl(url));
+
+          // Extract image attribute mappings from images array in JSON data
+          // or from form data (image_attributes_0, image_attributes_1, etc.)
+          // or from fileAttributes array in JSON data
+          const imagesWithAttributes: Array<{ url: string; attributes?: any }> = [];
+          
+          // Check if images array exists in productData (preferred source)
+          const imagesFromJson = (productData as any).images as Array<{ attributes?: any }> | undefined;
+          
+          // Check if fileAttributes array exists in productData (fallback)
+          const fileAttributes = (productData as any).fileAttributes as Array<{ index: number; attributes: any }> | undefined;
+          
+          for (let i = 0; i < publicUrls.length; i++) {
+            const url = publicUrls[i];
+            let attributes: any = undefined;
+            
+            // First try to get from images array in JSON (preferred)
+            if (imagesFromJson && Array.isArray(imagesFromJson) && imagesFromJson[i] && imagesFromJson[i].attributes) {
+              attributes = imagesFromJson[i].attributes;
+            }
+            // Then try fileAttributes array (if provided)
+            else if (fileAttributes && Array.isArray(fileAttributes)) {
+              const fileAttr = fileAttributes.find(fa => fa.index === i);
+              if (fileAttr && fileAttr.attributes) {
+                attributes = fileAttr.attributes;
+              }
+            }
+            // Finally try form data field image_attributes_{index}
+            else {
+              const attributesField = formData.get(`image_attributes_${i}`) as string | null;
+              if (attributesField) {
+                try {
+                  attributes = JSON.parse(attributesField);
+                } catch (e) {
+                  // If parsing fails, ignore attributes for this image
+                  console.warn(`Failed to parse attributes for image ${i}:`, e);
+                }
+              }
+            }
+            
+            imagesWithAttributes.push({
+              url,
+              ...(attributes && Object.keys(attributes).length > 0 ? { attributes } : {})
+            });
+          }
+          
+          // Remove fileAttributes from productData as it's not part of the schema
+          if ((productData as any).fileAttributes) {
+            delete (productData as any).fileAttributes;
+          }
+
+          // Always use the new images format when we have uploaded files
+          // (the images array from JSON is replaced with uploaded URLs)
+          productData.images = imagesWithAttributes;
         }
       } else {
         // Handle JSON request (backward compatibility)
@@ -175,7 +233,7 @@ export const productController = {
         return c.json(failure("Invalid input", "VALIDATION_ERROR"), 400);
       }
 
-      const product = await productService.create({ ...parsed.data, image_urls: imageUrls });
+      const product = await productService.create(parsed.data);
       return c.json(success(product, "Product created successfully"));
     } catch (error: any) {
       return c.json(
@@ -296,6 +354,42 @@ export const productController = {
     return c.json(success(null, "Product deleted successfully"));
   },
 
+  async bulkDelete(c: Context) {
+    try {
+      const body = await c.req.json();
+      const parsed = BulkDeleteProductDTO.safeParse(body);
+      
+      if (!parsed.success) {
+        return c.json(
+          {
+            ...failure("Invalid input", "VALIDATION_ERROR"),
+            errors: parsed.error.errors
+          },
+          400
+        );
+      }
+
+      const result = await productService.deleteBulk(parsed.data.product_ids);
+      
+      return c.json(
+        success(
+          {
+            deleted: result.deleted,
+            failed: result.failed,
+            total: parsed.data.product_ids.length,
+            errors: result.errors
+          },
+          `Bulk delete completed: ${result.deleted} products deleted, ${result.failed} failed`
+        )
+      );
+    } catch (error: any) {
+      return c.json(
+        failure(error.message || "Failed to delete products", "DELETE_ERROR"),
+        error.status || 500
+      );
+    }
+  },
+
   async list(c: Context) {
     const query = c.req.query();
     const parsed = ProductListDTO.safeParse(query);
@@ -314,7 +408,19 @@ export const productController = {
         return c.json(failure("Invalid image ID", "VALIDATION_ERROR"), 400);
       }
 
-      await productImageRepo.deleteById(imageId);
+      // Delete from database and get the image URL
+      const imageUrl = await productImageRepo.deleteById(imageId);
+      
+      if (!imageUrl) {
+        return c.json(failure("Image not found", "NOT_FOUND"), 404);
+      }
+
+      // Delete from R2 storage
+      if (imageUrl) {
+        const { r2Service } = await import("../services/r2.service");
+        await r2Service.deleteFile(imageUrl);
+      }
+
       return c.json(success(null, "Product image deleted successfully"));
     } catch (error: any) {
       return c.json(

@@ -5,15 +5,27 @@ import { success, failure } from "../utils/apiResponse";
 
 export const orderController = {
   async create(c: Context) {
-    const user = c.get("user");
-    const body = await c.req.json();
-    const parsed = CreateOrderDTO.safeParse(body);
-    if (!parsed.success) {
-      return c.json(failure("Invalid input", "VALIDATION_ERROR"), 400);
-    }
+    try {
+      const user = c.get("user");
+      const body = await c.req.json();
+      console.log("body", body);
+      
+      const parsed = CreateOrderDTO.safeParse(body);
+      if (!parsed.success) {
+        return c.json(
+          failure("Invalid input: " + parsed.error.errors.map(e => e.message).join(", "), "VALIDATION_ERROR"),
+          400
+        );
+      }
 
-    const order = await orderService.createOrder(user.sub, parsed.data);
-    return c.json(success(order, "Order created successfully"));
+      const orders = await orderService.createOrders(user.sub, parsed.data);
+      return c.json(success(orders, "Orders created successfully"));
+    } catch (error: any) {
+      return c.json(
+        failure(error.message || "Failed to create orders", "CREATE_ERROR"),
+        error.status || 500
+      );
+    }
   },
 
   async getById(c: Context) {

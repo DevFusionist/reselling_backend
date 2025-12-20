@@ -5,10 +5,13 @@ import { CreateShareLinkInput } from "../dtos/shareLink.dto";
 export const shareLinkService = {
   async createShareLink(creatorId: number, input: CreateShareLinkInput) {
     // Verify product exists
-    const product = await productRepo.findById(input.product_id);
-    if (!product) {
+    const productResult = await productRepo.findById(input.product_id);
+    if (!productResult) {
       throw { status: 404, message: "Product not found", code: "NOT_FOUND" };
     }
+
+    // Handle both old format (direct product) and new format (product with images)
+    const product = (productResult as any).product || productResult;
 
     const link = await shareLinkRepo.create(creatorId, input);
     

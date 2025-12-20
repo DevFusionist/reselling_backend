@@ -5,8 +5,8 @@ import { SetMarkupInput, MarkupListInput } from "../dtos/markup.dto";
 export const markupService = {
   async setMarkup(resellerId: number, input: SetMarkupInput) {
     // Verify product exists
-    const product = await productRepo.findById(input.product_id);
-    if (!product) {
+    const productResult = await productRepo.findById(input.product_id);
+    if (!productResult) {
       throw { status: 404, message: "Product not found", code: "NOT_FOUND" };
     }
 
@@ -19,10 +19,13 @@ export const markupService = {
       throw { status: 404, message: "Markup not found", code: "NOT_FOUND" };
     }
 
-    const product = await productRepo.findById(productId);
-    if (!product) {
+    const productResult = await productRepo.findById(productId);
+    if (!productResult) {
       throw { status: 404, message: "Product not found", code: "NOT_FOUND" };
     }
+
+    // Handle both old format (direct product) and new format (product with images)
+    const product = (productResult as any).product || productResult;
 
     const basePrice = Number(product.base_price);
     const markupAmount = Number(markup.markup_amount);

@@ -37,9 +37,9 @@ export const shareLinkRepo = {
       }
     });
 
-    const productImages = await db.select().from(product_images).where(eq(product_images.product_id, link!.product!.id));
-
     if (!link) return null;
+
+    const productImages = await db.select().from(product_images).where(eq(product_images.product_id, link.product.id));
 
     // Check if expired
     if (link.expires_at && new Date(link.expires_at) < new Date()) {
@@ -52,10 +52,13 @@ export const shareLinkRepo = {
     const finalPrice = (basePrice + marginAmount).toFixed(2);
 
     // Return only required fields
+    // Note: margin_amount and creator_id are included for order processing
     return {
       id: link.id,
       code: link.code,
       expires_at: link.expires_at,
+      margin_amount: link.margin_amount, // Needed for order calculation
+      creator_id: link.creator_id, // Needed for order processing
       product: {
         id: link.product.id,
         sku: link.product.sku,

@@ -72,12 +72,55 @@ export const productService = {
             const title = row.title || row.name || row['Product Name'] || row['product_name'] || row['Title'] || '';
             const sku = row.sku || row.SKU || row['Product SKU'] || row['product_sku'] || '';
             
-            const productData = {
+            const productData: any = {
               title,
               description: row.description || row.desc || row['Description'] || row['description'] || '',
               base_price: parseFloat(row.base_price || row.price || row['Base Price'] || row['base_price'] || row['Price'] || '0'),
               stock: parseInt(row.stock || row.quantity || row['Stock'] || row['stock'] || row['Quantity'] || '0', 10)
             };
+
+            // Map optional fields with flexible column name matching
+            if (row.reseller_price || row['Reseller Price'] || row['reseller_price']) {
+              productData.reseller_price = parseFloat(row.reseller_price || row['Reseller Price'] || row['reseller_price'] || '0');
+            }
+            if (row.retail_price || row['Retail Price'] || row['retail_price']) {
+              productData.retail_price = parseFloat(row.retail_price || row['Retail Price'] || row['retail_price'] || '0');
+            }
+            if (row.category || row['Category'] || row['category']) {
+              productData.category = row.category || row['Category'] || row['category'] || '';
+            }
+            if (row.sub_category || row['Sub Category'] || row['sub_category'] || row['Sub-Category']) {
+              productData.sub_category = row.sub_category || row['Sub Category'] || row['sub_category'] || row['Sub-Category'] || '';
+            }
+            if (row.brand || row['Brand'] || row['brand']) {
+              productData.brand = row.brand || row['Brand'] || row['brand'] || '';
+            }
+            if (row.model || row['Model'] || row['model']) {
+              productData.model = row.model || row['Model'] || row['model'] || '';
+            }
+            if (row.color || row['Color'] || row['colour'] || row['Colour']) {
+              productData.color = row.color || row['Color'] || row['colour'] || row['Colour'] || '';
+            }
+            if (row.size || row['Size'] || row['size']) {
+              productData.size = row.size || row['Size'] || row['size'] || '';
+            }
+            if (row.material || row['Material'] || row['material']) {
+              productData.material = row.material || row['Material'] || row['material'] || '';
+            }
+            if (row.style || row['Style'] || row['style']) {
+              productData.style = row.style || row['Style'] || row['style'] || '';
+            }
+            if (row.fit || row['Fit'] || row['fit']) {
+              productData.fit = row.fit || row['Fit'] || row['fit'] || '';
+            }
+            if (row.pattern || row['Pattern'] || row['pattern']) {
+              productData.pattern = row.pattern || row['Pattern'] || row['pattern'] || '';
+            }
+            const isFeaturedValue = row.is_featured || row['Is Featured'] || row['is_featured'] || row['IsFeatured'];
+            if (isFeaturedValue !== undefined && isFeaturedValue !== null && isFeaturedValue !== '') {
+              const value = String(isFeaturedValue).toLowerCase();
+              productData.is_featured = value === 'true' || value === '1' || value === 'yes';
+            }
 
             // Validate with Zod (SKU is not part of DTO, will be generated if missing)
             const parsed = CreateProductDTO.safeParse(productData);
@@ -210,6 +253,20 @@ export const productService = {
       throw { status: 404, message: "Product not found", code: "NOT_FOUND" };
     }
     await productRepo.delete(id);
+  },
+
+  async deleteBulk(ids: number[]) {
+    if (ids.length === 0) {
+      throw { status: 400, message: "At least one product ID is required", code: "VALIDATION_ERROR" };
+    }
+    
+    // Validate that all IDs are valid numbers
+    const validIds = ids.filter(id => Number.isInteger(id) && id > 0);
+    if (validIds.length !== ids.length) {
+      throw { status: 400, message: "Invalid product IDs provided", code: "VALIDATION_ERROR" };
+    }
+    
+    return await productRepo.deleteBulk(validIds);
   },
 
   async list(input: ProductListInput) {

@@ -31,10 +31,13 @@ export const payoutService = {
     }
 
     // Calculate reseller earning
-    const product = await productRepo.findById(orderData.product_id);
-    if (!product) {
+    const productResult = await productRepo.findById(orderData.product_id);
+    if (!productResult) {
       throw { status: 404, message: "Product not found", code: "NOT_FOUND" };
     }
+
+    // Handle both old format (direct product) and new format (product with images)
+    const product = (productResult as any).product || productResult;
 
     const basePrice = Number(product.base_price);
     const finalPrice = Number(orderData.final_price);

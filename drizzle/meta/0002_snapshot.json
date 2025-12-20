@@ -1,6 +1,6 @@
 {
-  "id": "48f85614-c5fc-4449-9212-088be873bb0a",
-  "prevId": "bdb90dd7-c415-4c39-abaa-98f9e10cfe00",
+  "id": "8a9eab5d-bc2a-4de8-aba9-238def3283e9",
+  "prevId": "48f85614-c5fc-4449-9212-088be873bb0a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1837,6 +1837,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "category_id": {
+          "name": "category_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
         "name": {
           "name": "name",
           "type": "varchar(100)",
@@ -1852,13 +1858,28 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sub_categories_category_id_categories_id_fk": {
+          "name": "sub_categories_category_id_categories_id_fk",
+          "tableFrom": "sub_categories",
+          "tableTo": "categories",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "sub_categories_name_unique": {
-          "name": "sub_categories_name_unique",
+        "unique_category_sub_category": {
+          "name": "unique_category_sub_category",
           "nullsNotDistinct": false,
           "columns": [
+            "category_id",
             "name"
           ]
         }

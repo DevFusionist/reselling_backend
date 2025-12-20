@@ -1,19 +1,40 @@
 {
-  "version": "6",
+  "version": "7",
   "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
       "version": "7",
-      "when": 1764655585187,
-      "tag": "0000_clever_purple_man",
+      "when": 1765261949733,
+      "tag": "0000_slippery_shatterstar",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1764758306005,
-      "tag": "0001_petite_boomerang",
+      "when": 1766057509253,
+      "tag": "0001_classy_green_goblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1766058450240,
+      "tag": "0002_remarkable_toad_men",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1766060274301,
+      "tag": "0003_tan_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1766211023915,
+      "tag": "0004_loud_guardian",
       "breakpoints": true
     }
   ]

@@ -1,6 +1,6 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import sharp from "sharp";
-import { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_ENDPOINT } from "../config";
+import { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_ENDPOINT, R2_PUBLIC_URL } from "../config";
 
 // Initialize S3 client for Cloudflare R2
 const s3Client = new S3Client({
@@ -212,6 +212,84 @@ export const r2Service = {
     
     const key = `user/${fileName}`;
     return await this.uploadFile(file, key, true); // true = isProfilePicture
+  },
+
+  /**
+   * Extract R2 key from a public URL
+   * @param url - Public URL of the file (can be R2 endpoint URL or custom public URL)
+   * @returns The R2 key (path) or null if URL doesn't match R2 format
+   */
+  extractKeyFromUrl(url: string): string | null {
+    if (!url) return null;
+    
+    // Handle custom public URL format (e.g., https://cdn.example.com/product/...)
+    // If R2_PUBLIC_URL is set and URL starts with it, extract the path directly
+    if (R2_PUBLIC_URL && url.startsWith(R2_PUBLIC_URL)) {
+      const path = url.substring(R2_PUBLIC_URL.length);
+      // Remove leading slash if present
+      return path.startsWith('/') ? path.substring(1) : path;
+    }
+    
+    // Handle R2 endpoint format
+    // Format 1: https://<endpoint>/<bucket>/<key>
+    // Format 2: https://<account-id>.r2.cloudflarestorage.com/<bucket>/<key>
+    const bucketPrefix = `/${R2_BUCKET_NAME}/`;
+    const bucketIndex = url.indexOf(bucketPrefix);
+    
+    if (bucketIndex === -1) {
+      // Try to extract if it's a different format
+      // Check if URL contains the bucket name
+      const urlParts = url.split('/');
+      const bucketIndexInParts = urlParts.findIndex(part => part === R2_BUCKET_NAME);
+      if (bucketIndexInParts !== -1 && bucketIndexInParts < urlParts.length - 1) {
+        return urlParts.slice(bucketIndexInParts + 1).join('/');
+      }
+      return null;
+    }
+    
+    return url.substring(bucketIndex + bucketPrefix.length);
+  },
+
+  /**
+   * Delete a file from R2 storage
+   * @param url - Public URL of the file to delete
+   * @returns true if deleted successfully, false if file doesn't exist or error
+   */
+  async deleteFile(url: string): Promise<boolean> {
+    try {
+      const key = this.extractKeyFromUrl(url);
+      if (!key) {
+        console.warn(`Could not extract key from URL: ${url}`);
+        return false;
+      }
+
+      const command = new DeleteObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+      });
+
+      await s3Client.send(command);
+      return true;
+    } catch (error: any) {
+      console.error(`Failed to delete file from R2: ${error.message}`, { url });
+      // Don't throw - return false so deletion can continue even if R2 deletion fails
+      return false;
+    }
+  },
+
+  /**
+   * Delete multiple files from R2 storage
+   * @param urls - Array of public URLs to delete
+   * @returns Number of successfully deleted files
+   */
+  async deleteFiles(urls: string[]): Promise<number> {
+    if (urls.length === 0) return 0;
+
+    // Delete files in parallel for better performance
+    const deletePromises = urls.map(url => this.deleteFile(url));
+    const results = await Promise.all(deletePromises);
+    
+    return results.filter(result => result === true).length;
   },
 };
 

@@ -12,6 +12,7 @@ router.get("/:id", productController.getById);
 router.post("/", authRequired, adminOnly, productController.create);
 router.post("/bulk", authRequired, adminOnly, productController.createBulk);
 router.put("/:id", authRequired, adminOnly, productController.update);
+router.delete("/bulk-delete", authRequired, adminOnly, productController.bulkDelete);
 router.delete("/:id", authRequired, adminOnly, productController.delete);
 router.delete("/images/:imageId", authRequired, adminOnly, productController.deleteImage);
 
