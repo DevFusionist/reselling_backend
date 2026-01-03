@@ -1,0 +1,347 @@
+---
+alwaysApply: true
+---
+PROJECT: Multi-Model E-commerce Backend (Microservices)
+
+ROLE:
+You are a senior backend architect and NestJS expert.
+Build a production-ready microservices backend for a multi-model e-commerce platform.
+
+==================================================
+GLOBAL NON-NEGOTIABLE RULES
+==================================================
+
+ARCHITECTURE
+- Microservices architecture
+- Event-driven communication using RabbitMQ
+- API Gateway as the ONLY entry point
+- Database per service (NO shared DBs)
+- No service can access another service’s database
+
+TECH STACK
+- Node.js 18+
+- NestJS (latest stable)
+- PostgreSQL 15+
+- Prisma ORM
+- RabbitMQ 3.12+
+- Redis (optional, for caching)
+- Docker + Docker Compose
+- TypeScript (strict mode)
+- class-validator & class-transformer
+
+COMMUNICATION RULES
+- HTTP (sync) → Auth & Pricing validation only
+- Events (async) → Orders, Payments, Wallet, Notifications
+- Frontend NEVER talks to services directly
+- All traffic goes through API Gateway
+
+==================================================
+MICROSERVICES LIST (SEPARATE APPS)
+==================================================
+
+/services
+ ├── api-gateway
+ ├── auth-service
+ ├── product-service
+ ├── pricing-service
+ ├── order-service
+ ├── payment-service
+ ├── wallet-service
+ ├── share-link-service
+ └── notification-service
+
+Each service:
+- Independent NestJS app
+- Own Prisma schema
+- Own PostgreSQL database
+- Own Dockerfile
+
+==================================================
+API GATEWAY
+==================================================
+
+RESPONSIBILITIES
+- JWT validation
+- Route requests to services
+- Rate limiting
+- Logging
+
+RULES
+- No business logic
+- No database
+- Forwards requests only
+
+==================================================
+AUTH SERVICE
+==================================================
+
+FEATURES
+- User registration & login
+- Roles: ADMIN | CUSTOMER | RESELLER
+- JWT + Refresh tokens
+
+TABLES
+- users
+- roles
+- user_roles
+- refresh_tokens
+
+ENDPOINTS
+POST /auth/register
+POST /auth/login
+POST /auth/refresh
+GET  /auth/me
+
+==================================================
+PRODUCT SERVICE
+==================================================
+
+FEATURES
+- Product CRUD
+- Categories
+- Variants
+- Images
+
+TABLES
+- products
+- categories
+- product_variants
+- product_images
+
+ENDPOINTS
+GET    /products
+GET    /products/:id
+POST   /products (admin only)
+PUT    /products/:id (admin only)
+DELETE /products/:id (admin only)
+
+==================================================
+PRICING & COMMISSION SERVICE (CRITICAL)
+==================================================
+
+FEATURES
+- Base price
+- Reseller price
+- Seller margin validation
+- Commission calculation
+
+ENDPOINTS
+POST /pricing/validate-margin
+POST /pricing/calculate
+
+RULES
+- ALL pricing logic lives ONLY here
+- Other services must call this service
+- No pricing logic anywhere else
+
+==================================================
+SHARE-LINK SERVICE
+==================================================
+
+FEATURES
+- Generate unique share links (with expiration)
+- Validate margin using Pricing Service (HTTP call)
+- Track clicks and conversions
+- Associate links with resellers
+
+TABLES
+- share_links
+- link_clicks
+
+ENDPOINTS
+POST /share-links
+GET  /share-links/:code
+GET  /share-links (list user's links)
+
+==================================================
+ORDER SERVICE
+==================================================
+
+FEATURES
+- Create orders (validate pricing via Pricing Service)
+- Track order lifecycle (PENDING → PAID → SHIPPED → DELIVERED → CANCELLED)
+- Emit order events
+- Associate orders with share links
+
+TABLES
+- orders
+- order_items
+- order_status_logs
+
+EVENTS EMITTED
+- ORDER_CREATED
+- ORDER_PAID
+- ORDER_DELIVERED
+- ORDER_CANCELLED
+
+==================================================
+PAYMENT SERVICE
+==================================================
+
+FEATURES
+- Payment gateway integration
+- Webhook verification
+- Emit payment events
+
+TABLES
+- payments
+- payment_logs
+
+EVENTS EMITTED
+- PAYMENT_SUCCESS
+- PAYMENT_FAILED
+
+RULES
+- NEVER trust frontend payment success
+- Webhook is the source of truth
+
+==================================================
+WALLET SERVICE
+==================================================
+
+FEATURES
+- Seller wallets (one per reseller)
+- Pending & available balances
+- Commission ledger (audit trail)
+- Payout requests (with approval workflow)
+- Transaction history
+
+TABLES
+- wallets
+- wallet_transactions
+- payout_requests
+
+EVENTS CONSUMED
+- PAYMENT_SUCCESS
+- ORDER_DELIVERED
+- ORDER_CANCELLED
+
+==================================================
+NOTIFICATION SERVICE
+==================================================
+
+FEATURES
+- Email
+- WhatsApp
+- SMS
+- Fully event-driven
+
+EVENTS CONSUMED
+- ORDER_CREATED
+- ORDER_PAID
+- ORDER_DELIVERED
+- PAYMENT_SUCCESS
+- PAYMENT_FAILED
+- COMMISSION_UNLOCKED
+
+==================================================
+RABBITMQ CONFIGURATION
+==================================================
+
+EXCHANGE
+- events.exchange (topic)
+
+ROUTING KEYS
+- order.created
+- order.paid
+- order.delivered
+- order.cancelled
+- payment.success
+- payment.failed
+- wallet.commission.created
+- wallet.commission.unlocked
+
+RULES
+- One queue per service
+- Use acknowledgements (manual ack)
+- Implement retries (exponential backoff)
+- Use dead-letter queues (DLX)
+- Queue naming: {service-name}.queue
+- DLQ naming: {service-name}.dlq
+
+==================================================
+EVENT CONTRACT (MANDATORY FORMAT)
+==================================================
+
+{
+  "event": "PAYMENT_SUCCESS",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "data": {
+    "orderId": "string",
+    "userId": "string",
+    "sellerId": "string",
+    "amount": number,
+    "currency": "string"
+  }
+}
+
+NOTE: Event names use UPPER_SNAKE_CASE, routing keys use lower.dot.notation
+
+==================================================
+DOCKER SETUP
+==================================================
+
+- Dockerfile per service
+- Single docker-compose.yml at root
+- Include:
+  - RabbitMQ (with management UI)
+  - PostgreSQL (multiple databases, one per service)
+  - Redis (if used)
+  - All microservices
+- Use environment variables for all configs
+- Health check endpoints for all services
+
+==================================================
+CODING STANDARDS
+==================================================
+
+- DTOs everywhere (separate files)
+- class-validator for validation
+- No business logic in controllers
+- Centralized error handling (exception filters)
+- Services communicate via events (async) or HTTP (sync when needed)
+- Strong typing everywhere (no `any` types)
+- Use dependency injection
+- Follow NestJS module structure
+- Separate concerns: Controllers → Services → Repositories
+
+==================================================
+SECURITY RULES
+==================================================
+
+- Verify all payment webhooks (signature validation)
+- Lock commission at order creation (pending status)
+- Release commission ONLY after delivery confirmation
+- Never expose internal service URLs to frontend
+- Use environment variables for secrets
+- Hash passwords (bcrypt, min 10 rounds)
+- JWT expiration: access token (15min), refresh token (7days)
+- Rate limiting on API Gateway
+- CORS configuration
+- Input validation on all endpoints
+
+==================================================
+BUILD ORDER (IMPORTANT)
+==================================================
+
+1. Auth Service
+2. Product Service
+3. Pricing Service
+4. Order Service
+5. Payment Service
+6. Wallet Service
+7. Share-Link Service
+8. Notification Service
+9. API Gateway
+
+==================================================
+FINAL EXPECTATION
+==================================================
+
+- Project runs with: docker-compose up
+- End-to-end flow works:
+  Share Link → Order → Payment → Commission → Payout
+- Clean, scalable, production-ready microservices system
+
+INSTRUCTION FOR CURSOR:
+"Follow these instructions strictly. Build step by step. Ask before making assumptions."

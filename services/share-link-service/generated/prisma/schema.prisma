@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ShareLink {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  sellerId    String
+  productId   String?
+  sellerPrice Decimal?  @db.Decimal(10, 2)
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  clicks LinkClick[]
+
+  @@index([code])
+  @@index([sellerId])
+  @@index([productId])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([sellerId, isActive, createdAt]) // Composite index for seller's active links
+  @@map("share_links")
+}
+
+model LinkClick {
+  id          String   @id @default(uuid())
+  shareLinkId String
+  ipAddress   String?
+  userAgent   String?
+  referer     String?
+  createdAt   DateTime @default(now())
+
+  shareLink ShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+
+  @@index([shareLinkId])
+  @@index([createdAt])
+  @@map("link_clicks")
+}

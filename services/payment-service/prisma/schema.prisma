@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CARD
+  UPI
+  NETBANKING
+  WALLET
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  userId        String
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("USD")
+  status        PaymentStatus @default(PENDING)
+  method        PaymentMethod
+  gatewayId     String? // Payment gateway transaction ID
+  gatewayResponse String? // Full gateway response (JSON)
+  failureReason String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  logs          PaymentLog[]
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([gatewayId])
+  @@map("payments")
+}
+
+model PaymentLog {
+  id          String   @id @default(uuid())
+  paymentId   String
+  action      String // e.g., "initiated", "webhook_received", "status_changed"
+  data        String? // JSON data
+  createdAt   DateTime @default(now())
+
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_logs")
+}
+

@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ProductPricing {
+  id             String   @id @default(uuid())
+  productId      String   @unique
+  basePrice      Decimal  @db.Decimal(10, 2)
+  resellerPrice  Decimal  @db.Decimal(10, 2)
+  commissionRate Decimal  @db.Decimal(5, 2) // Percentage (e.g., 10.50 for 10.5%)
+  minMargin      Decimal? @db.Decimal(5, 2) // Minimum margin percentage required
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("product_pricing")
+}

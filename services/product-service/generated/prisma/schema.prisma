@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  slug        String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  slug        String   @unique
+  sku         String?  @unique
+  categoryId  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants ProductVariant[]
+  images   ProductImage[]
+  options  VariantOption[] // Product-level variant options (Color, Size, etc.)
+
+  @@index([categoryId])
+  @@index([slug])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([categoryId, isActive]) // Composite index for filtered category queries
+  @@map("products")
+}
+
+model ProductVariant {
+  id        String   @id @default(uuid())
+  productId String
+  name      String // Auto-generated from options: "Red / Large"
+  sku       String?  @unique
+  price     Decimal  @db.Decimal(10, 2)
+  stock     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product      Product                     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  optionValues ProductVariantOptionValue[]
+
+  @@index([productId])
+  @@index([isActive])
+  @@index([price])
+  @@index([productId, isActive]) // Composite index for active variants per product
+  @@map("product_variants")
+}
+
+// Variant option types per product (e.g., "Color", "Size", "Shape")
+model VariantOption {
+  id        String   @id @default(uuid())
+  productId String
+  name      String // "Color", "Size", "Shape"
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  values  VariantOptionValue[]
+
+  @@unique([productId, name])
+  @@index([productId])
+  @@map("variant_options")
+}
+
+// Possible values for each option (e.g., "Red", "Blue" for Color)
+model VariantOptionValue {
+  id        String   @id @default(uuid())
+  optionId  String
+  value     String // "Red", "Large", "Round"
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  option   VariantOption               @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  variants ProductVariantOptionValue[]
+
+  @@unique([optionId, value])
+  @@index([optionId])
+  @@map("variant_option_values")
+}
+
+// Junction table: links variants to their specific option values
+model ProductVariantOptionValue {
+  variantId     String
+  optionValueId String
+
+  variant     ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  optionValue VariantOptionValue @relation(fields: [optionValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, optionValueId])
+  @@map("product_variant_option_values")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  url       String
+  alt       String?
+  order     Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}

@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TransactionType {
+  COMMISSION_CREATED
+  COMMISSION_UNLOCKED
+  PAYOUT_REQUESTED
+  PAYOUT_APPROVED
+  PAYOUT_REJECTED
+  PAYOUT_PROCESSED
+  REFUND
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+model Wallet {
+  id              String   @id @default(uuid())
+  sellerId        String   @unique
+  pendingBalance  Decimal  @default(0) @db.Decimal(10, 2)
+  availableBalance Decimal @default(0) @db.Decimal(10, 2)
+  currency        String   @default("USD")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  transactions    WalletTransaction[]
+  payoutRequests  PayoutRequest[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id            String          @id @default(uuid())
+  walletId     String
+  orderId      String?
+  type         TransactionType
+  amount       Decimal         @db.Decimal(10, 2)
+  balanceBefore Decimal        @db.Decimal(10, 2)
+  balanceAfter  Decimal        @db.Decimal(10, 2)
+  description  String?
+  metadata     String? // JSON
+  createdAt    DateTime        @default(now())
+
+  wallet       Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([orderId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([walletId, type, createdAt]) // Composite index for transaction history
+  @@index([walletId, createdAt]) // Composite index for paginated transaction history
+  @@map("wallet_transactions")
+}
+
+model PayoutRequest {
+  id            String        @id @default(uuid())
+  walletId      String
+  amount        Decimal       @db.Decimal(10, 2)
+  status        PayoutStatus  @default(PENDING)
+  bankAccount   String?
+  notes         String?
+  processedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  wallet        Wallet        @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([status])
+  @@map("payout_requests")
+}
+
