@@ -4,9 +4,11 @@ import * as http from 'http';
 import * as https from 'https';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
+import { CircuitBreakerModule } from '../common/circuit-breaker/circuit-breaker.module';
 
 @Module({
   imports: [
+    CircuitBreakerModule, // OPTIMIZATION: Circuit breaker for fault tolerance
     HttpModule.register({
       timeout: 30000,
       maxRedirects: 5,

@@ -111,6 +111,7 @@ export class UsersService {
   }
 
   async findById(id: string) {
+    console.log('findById', id);
     // OPTIMIZATION: Check cache first
     const cacheKey = `user:${id}`;
     const cached = await this.cacheManager.get(cacheKey);

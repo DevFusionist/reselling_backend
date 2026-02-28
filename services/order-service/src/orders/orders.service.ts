@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { RabbitMQService } from '../common/rabbitmq/rabbitmq.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { CircuitBreakerService } from '../common/circuit-breaker/circuit-breaker.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderStatus } from '../../generated/prisma';
@@ -15,6 +16,7 @@ export class OrdersService {
     private rabbitMQService: RabbitMQService,
     private httpService: HttpService,
     private configService: ConfigService,
+    private circuitBreaker: CircuitBreakerService,
   ) {}
 
   async create(createOrderDto: CreateOrderDto) {
@@ -36,11 +38,17 @@ export class OrdersService {
 
     let pricingResult;
     try {
-      const response = await firstValueFrom(
-        this.httpService.post(`${pricingServiceUrl}/pricing/calculate`, calculateDto),
+      // OPTIMIZATION: Use circuit breaker to prevent cascading failures
+      const response = await this.circuitBreaker.execute(
+        'pricing-service',
+        async () => {
+          return await firstValueFrom(
+            this.httpService.post(`${pricingServiceUrl}/pricing/calculate`, calculateDto),
+          );
+        },
       );
       pricingResult = response.data;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `Pricing validation failed: ${error.response?.data?.message || error.message}`,
       );
@@ -174,12 +182,14 @@ export class OrdersService {
   }
 
   async findOne(id: string) {
+    // OPTIMIZATION: Limit status logs to last 20 to prevent loading hundreds of logs for old orders
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
         items: true,
         statusLogs: {
           orderBy: { createdAt: 'desc' },
+          take: 20, // Limit to last 20 status logs
         },
       },
     });
@@ -212,6 +222,7 @@ export class OrdersService {
         items: true,
         statusLogs: {
           orderBy: { createdAt: 'desc' },
+          take: 20, // OPTIMIZATION: Limit to last 20 status logs
         },
       },
     });

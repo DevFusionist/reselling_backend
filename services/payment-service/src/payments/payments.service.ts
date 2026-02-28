@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { RabbitMQService } from '../common/rabbitmq/rabbitmq.service';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
+import { CircuitBreakerService } from '../common/circuit-breaker/circuit-breaker.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentStatus } from '../../generated/prisma';
 import { firstValueFrom } from 'rxjs';
@@ -18,6 +19,7 @@ export class PaymentsService {
     private prisma: PrismaService,
     private rabbitMQService: RabbitMQService,
     private configService: ConfigService,
+    private circuitBreaker: CircuitBreakerService,
     private httpService: HttpService,
   ) {
     // Initialize Razorpay
@@ -352,8 +354,14 @@ export class PaymentsService {
     try {
       // Use localhost as default for local development
       const orderServiceUrl = this.configService.get<string>('ORDER_SERVICE_URL') || 'http://localhost:3004';
-      const orderResponse: any = await firstValueFrom(
-        this.httpService.get(`${orderServiceUrl}/orders/${orderId}`),
+      // OPTIMIZATION: Use circuit breaker to prevent cascading failures
+      const orderResponse: any = await this.circuitBreaker.execute(
+        'order-service',
+        async () => {
+          return await firstValueFrom(
+            this.httpService.get(`${orderServiceUrl}/orders/${orderId}`),
+          );
+        },
       );
       orderDetails = orderResponse.data;
     } catch (error) {
@@ -387,12 +395,18 @@ export class PaymentsService {
     if (updatedPayment.status === PaymentStatus.SUCCESS && orderDetails) {
       try {
         // Use localhost as default for local development
-      const orderServiceUrl = this.configService.get<string>('ORDER_SERVICE_URL') || 'http://localhost:3004';
-        await firstValueFrom(
-          this.httpService.patch(`${orderServiceUrl}/orders/${orderId}/status`, {
-            status: 'PAID',
-            notes: 'Payment confirmed via webhook',
-          }),
+        const orderServiceUrl = this.configService.get<string>('ORDER_SERVICE_URL') || 'http://localhost:3004';
+        // OPTIMIZATION: Use circuit breaker to prevent cascading failures
+        await this.circuitBreaker.execute(
+          'order-service',
+          async () => {
+            return await firstValueFrom(
+              this.httpService.patch(`${orderServiceUrl}/orders/${orderId}/status`, {
+                status: 'PAID',
+                notes: 'Payment confirmed via webhook',
+              }),
+            );
+          },
         );
         this.logger.log(`Order ${orderId} status updated to PAID`);
       } catch (error) {

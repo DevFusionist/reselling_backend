@@ -4,6 +4,7 @@ import { Cache } from 'cache-manager';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { CircuitBreakerService } from '../common/circuit-breaker/circuit-breaker.service';
 import { CreateShareLinkDto } from './dto/create-share-link.dto';
 import { firstValueFrom } from 'rxjs';
 
@@ -16,6 +17,7 @@ export class ShareLinksService {
     private httpService: HttpService,
     private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private circuitBreaker: CircuitBreakerService,
   ) {}
 
   async create(createShareLinkDto: CreateShareLinkDto) {
@@ -25,17 +27,23 @@ export class ShareLinksService {
       const pricingServiceUrl = this.configService.get<string>('PRICING_SERVICE_URL') || 'http://localhost:3003';
 
       try {
-        const response = await firstValueFrom(
-          this.httpService.post(`${pricingServiceUrl}/pricing/validate-margin`, {
-            productId: createShareLinkDto.productId,
-            sellerPrice: createShareLinkDto.sellerPrice,
-          }),
+        // OPTIMIZATION: Use circuit breaker to prevent cascading failures
+        const response = await this.circuitBreaker.execute(
+          'pricing-service',
+          async () => {
+            return await firstValueFrom(
+              this.httpService.post(`${pricingServiceUrl}/pricing/validate-margin`, {
+                productId: createShareLinkDto.productId,
+                sellerPrice: createShareLinkDto.sellerPrice,
+              }),
+            );
+          },
         );
 
         if (!response.data.valid) {
           throw new BadRequestException(`Invalid margin: ${response.data.message}`);
         }
-      } catch (error) {
+      } catch (error: any) {
         if (error instanceof BadRequestException) {
           throw error;
         }

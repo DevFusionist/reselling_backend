@@ -9,7 +9,6 @@ import {
   Query,
   ParseIntPipe,
   DefaultValuePipe,
-  ParseBoolPipe,
   UseGuards,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
